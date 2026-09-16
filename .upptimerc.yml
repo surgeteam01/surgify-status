@@ -1,31 +1,86 @@
-# Change these first
-owner: upptime # Your GitHub organization or username, where this repository lives
-repo: upptime # The name of this repository
+# Surge Systems status page — status.surgesystems.tech
+#
+# AUTHORED IN `surgify-ops` at `status-page/upptime.yml` and copied here.
+#
+# The page must live in its own repository because it may not share a failure domain
+# with anything it reports on: Vercel carries the Ops portal, Client OS and the client
+# portal, and the VPS carries the API — so a page on either would be dark exactly when
+# somebody checks whether we are dark. GitHub carries none of the four.
+#
+# But the component list is a statement about *our* system, so it is authored beside the
+# code that produces it, and `scripts/status-page-components.test.mjs` in surgify-ops
+# asserts the `/status/<key>` probes below cover `statusComponents` exactly. Change the
+# components there, not here, then copy.
+
+owner: surgeteam01
+repo: surgify-status
 
 sites:
-  - name: Google
-    url: https://www.google.com
-  - name: Wikipedia
-    url: https://en.wikipedia.org
-  - name: Hacker News
-    url: https://news.ycombinator.com
-  - name: Secret Site
-    url: $SECRET_SITE
+  # The API's own reachability, and nothing more. Deliberately not declared in the body:
+  # a response saying "the API is up" is a tautology, and one saying it is down cannot
+  # arrive. A failed REQUEST is the verdict.
+  - name: API
+    url: https://api.surgesystems.tech/status
+    maxResponseTime: 2000
+
+  # One URL per component — Upptime treats one URL as one monitored component, so
+  # per-component history needs a per-component URL.
+  #
+  # `/status` always answers 200, including when down, because a prober cannot tell a 503
+  # from a host that has gone away. So the verdict is read from the BODY. Remove these
+  # matchers and every component reads green through an outage the body is correctly
+  # reporting.
+  - name: Database
+    url: https://api.surgesystems.tech/status/database
+    maxResponseTime: 2000
+    __dangerous__body_down: '"status":"down"'
+    __dangerous__body_degraded: '"status":"degraded"'
+
+  - name: Background jobs
+    url: https://api.surgesystems.tech/status/jobs
+    maxResponseTime: 2000
+    __dangerous__body_down: '"status":"down"'
+    __dangerous__body_degraded: '"status":"degraded"'
+
+  # The Vercel-hosted surfaces, probed directly. The API cannot testify to a front-end it
+  # does not serve, so these are never folded into `/status`.
+  #
+  # `expectedStatusCodes` is stated rather than relied upon: Upptime accepts all 20x and
+  # 30x by default, and `ops.surgesystems.tech` answers 307 to an unauthenticated GET —
+  # so the default is already correct today. It is pinned because a sign-in redirect being
+  # healthy is a decision about THIS site, not a default worth inheriting silently.
+  - name: Ops portal
+    url: https://ops.surgesystems.tech
+    maxResponseTime: 4000
+    expectedStatusCodes: [200, 307, 308]
+
+  - name: Client OS
+    url: https://client-os.surgesystems.tech
+    maxResponseTime: 4000
+    expectedStatusCodes: [200, 307, 308]
 
 status-website:
-  # Add your custom domain name, or remove the `cname` line if you don't have a domain
-  # Uncomment the `baseUrl` line if you don't have a custom domain and add your repo name there
-  cname: demo.upptime.js.org
-  # baseUrl: /your-repo-name
-  logoUrl: https://raw.githubusercontent.com/upptime/upptime.js.org/master/static/img/icon.svg
-  name: Upptime
-  introTitle: "**Upptime** is the open-source uptime monitor and status page, powered entirely by GitHub."
-  introMessage: This is a sample status page which uses **real-time** data from our [GitHub repository](https://github.com/upptime/upptime). No server required — just GitHub Actions, Issues, and Pages. [**Get your own for free**](https://github.com/upptime/upptime)
+  cname: status.surgesystems.tech
+  name: Surge Systems Status
+  introTitle: Surge Systems status
+  introMessage: Live status of the Surge Systems platform. Updated every five minutes; incidents are posted as they happen.
   navbar:
     - title: Status
       href: /
-    - title: GitHub
-      href: https://github.com/$OWNER/$REPO
+    - title: Surge Systems
+      href: https://surgesystems.tech
 
-# Upptime also supports notifications, assigning issues, and more
-# See https://upptime.js.org/docs/configuration
+# How often the probes run. Five minutes is Upptime's own default and GitHub's cron is
+# routinely late — acceptable, because this page reports availability rather than a
+# per-second SLA, and nothing downstream promises one.
+workflowSchedule:
+  uptime: "*/5 * * * *"
+  responseTime: "0 23 * * *"
+  graphs: "0 0 * * *"
+  staticSite: "0 1 * * *"
+  summary: "0 0 * * *"
+
+# Milliseconds between checking each endpoint — NOT the check frequency, which is
+# `workflowSchedule.uptime` above. Five sites against two hosts, so a small stagger keeps
+# us from arriving as a burst.
+delay: 1000
